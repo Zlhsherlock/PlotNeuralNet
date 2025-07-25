@@ -1,0 +1,269 @@
+
+\documentclass[border=8pt, multi, tikz]{standalone} 
+\usepackage{import}
+\subimport{../layers/}{init}
+\usetikzlibrary{positioning}
+\usetikzlibrary{3d} %for including external image 
+
+\def\ConvColor{rgb:yellow,5;red,2.5;white,5}
+\def\ConvReluColor{rgb:yellow,5;red,5;white,5}
+\def\PoolColor{rgb:red,1;black,0.3}
+\def\UnpoolColor{rgb:blue,2;green,1;black,0.3}
+\def\FcColor{rgb:blue,5;red,2.5;white,5}
+\def\FcReluColor{rgb:blue,5;red,5;white,4}
+\def\SoftmaxColor{rgb:magenta,5;black,7}   
+\def\SumColor{rgb:blue,5;green,15}
+
+\newcommand{\copymidarrow}{\tikz \draw[-Stealth,line width=0.8mm,draw={rgb:blue,4;red,1;green,1;black,3}] (-0.3,0) -- ++(0.3,0);}
+
+\begin{document}
+\begin{tikzpicture}
+\tikzstyle{connection}=[ultra thick,every node/.style={sloped,allow upside down},draw=\edgecolor,opacity=0.7]
+\tikzstyle{copyconnection}=[ultra thick,every node/.style={sloped,allow upside down},draw={rgb:blue,4;red,1;green,1;black,3},opacity=0.7]
+
+\pic[shift={(0,0,0)}] at (0,0,0) 
+    {Box={
+        name=static_input,
+        caption=Static Cost\\[B,1,D,H/4,W/4],
+        xlabel={{1, }},
+        zlabel=32,
+        fill=\ConvColor,
+        height=32,
+        width=1,
+        depth=32
+        }
+    };
+
+\pic[shift={(0,-4,0)}] at (0,0,0) 
+    {Box={
+        name=dynamic_input,
+        caption=Dynamic Cost\\[B,1,D,H/4,W/4],
+        xlabel={{1, }},
+        zlabel=32,
+        fill=\ConvColor,
+        height=32,
+        width=1,
+        depth=32
+        }
+    };
+
+\pic[shift={(0,4,0)}] at (0,0,0) 
+    {Box={
+        name=flow_input,
+        caption=Flow Input\\[B,2,H,W],
+        xlabel={{2, }},
+        zlabel=64,
+        fill=\ConvColor,
+        height=64,
+        width=1,
+        depth=64
+        }
+    };
+
+\pic[shift={(2,0,0)}] at (static_input-east) 
+    {Box={
+        name=concat_layer,
+        caption=Concatenation\\[B,2,D,H/4,W/4],
+        xlabel={{2, }},
+        zlabel=32,
+        fill=\ConvColor,
+        height=32,
+        width=2,
+        depth=32
+        }
+    };
+
+\draw [connection]  (static_input-east)    -- node {\midarrow} (concat_layer-west);
+
+\draw [connection]  (dynamic_input-east)    -- node {\midarrow} (concat_layer-west);
+
+\pic[shift={(1.5,0,0)}] at (concat_layer-east) 
+    {Box={
+        name=conv3d_1,
+        caption=3D Conv\\2→16 channels,
+        xlabel={{16, }},
+        zlabel=32,
+        fill=\ConvColor,
+        height=32,
+        width=3,
+        depth=32
+        }
+    };
+
+\draw [connection]  (concat_layer-east)    -- node {\midarrow} (conv3d_1-west);
+
+\pic[shift={(1.5,0,0)}] at (conv3d_1-east) 
+    {Box={
+        name=conv3d_2,
+        caption=3D Conv\\16→8 channels\\corr\_feat,
+        xlabel={{8, }},
+        zlabel=32,
+        fill=\ConvColor,
+        height=32,
+        width=2.5,
+        depth=32
+        }
+    };
+
+\draw [connection]  (conv3d_1-east)    -- node {\midarrow} (conv3d_2-west);
+
+\pic[shift={(2,2,0)}] at (conv3d_2-east) 
+    {Box={
+        name=dynamic_mask_gen,
+        caption=Dynamic Mask\\Generation,
+        xlabel={{1, }},
+        zlabel=28,
+        fill=\ConvColor,
+        height=28,
+        width=1,
+        depth=28
+        }
+    };
+
+\draw [connection]  (conv3d_2-east)    -- node {\midarrow} (dynamic_mask_gen-west);
+
+\pic[shift={(4,-2,0)}] at (flow_input-east) 
+    {Box={
+        name=flow_magnitude,
+        caption=Flow Magnitude\\sqrt(F\_x²+F\_y²),
+        xlabel={{1, }},
+        zlabel=32,
+        fill=\ConvColor,
+        height=32,
+        width=1,
+        depth=32
+        }
+    };
+
+\draw [connection]  (flow_input-east)    -- node {\midarrow} (flow_magnitude-west);
+
+\pic[shift={(1.5,0,0)}] at (flow_magnitude-east) 
+    {Box={
+        name=flow_soft_mask,
+        caption=Flow Soft Mask\\sigmoid((mag-1.0)×5.0),
+        xlabel={{1, }},
+        zlabel=28,
+        fill=\ConvColor,
+        height=28,
+        width=1,
+        depth=28
+        }
+    };
+
+\draw [connection]  (flow_magnitude-east)    -- node {\midarrow} (flow_soft_mask-west);
+
+\pic[shift={(1.5,0,0)}] at (flow_soft_mask-east) 
+    {Box={
+        name=flow_3d_ext,
+        caption=3D Extension\\flow\_mask\_3d,
+        xlabel={{1, }},
+        zlabel=28,
+        fill=\ConvColor,
+        height=28,
+        width=1,
+        depth=28
+        }
+    };
+
+\draw [connection]  (flow_soft_mask-east)    -- node {\midarrow} (flow_3d_ext-west);
+
+\pic[shift={(2,0,0)}] at (dynamic_mask_gen-east) 
+    {Box={
+        name=mask_combine,
+        caption=Mask Combination\\max(dynamic\_mask,\\flow\_mask),
+        xlabel={{1, }},
+        zlabel=28,
+        fill=\ConvColor,
+        height=28,
+        width=1,
+        depth=28
+        }
+    };
+
+\draw [connection]  (dynamic_mask_gen-east)    -- node {\midarrow} (mask_combine-west);
+
+\draw [connection]  (flow_3d_ext-east)    -- node {\midarrow} (mask_combine-west);
+
+\pic[shift={(2,-1,0)}] at (conv3d_2-east) 
+    {Box={
+        name=multi_concat,
+        caption=Multi-info Concat\\cat([C\_s, C\_d, corr\_feat,\\mask]) [B,11,D,H/4,W/4],
+        xlabel={{11, }},
+        zlabel=32,
+        fill=\ConvColor,
+        height=32,
+        width=4,
+        depth=32
+        }
+    };
+
+\draw [connection]  (conv3d_2-east)    -- node {\midarrow} (multi_concat-west);
+
+\draw [connection]  (mask_combine-east)    -- node {\midarrow} (multi_concat-west);
+
+\pic[shift={(2,0,0)}] at (multi_concat-east) 
+    {Box={
+        name=fusion_conv1,
+        caption=Residual Fusion\\3D Conv 11→32,
+        xlabel={{32, }},
+        zlabel=32,
+        fill=\ConvColor,
+        height=32,
+        width=5,
+        depth=32
+        }
+    };
+
+\draw [connection]  (multi_concat-east)    -- node {\midarrow} (fusion_conv1-west);
+
+\pic[shift={(1.5,0,0)}] at (fusion_conv1-east) 
+    {Box={
+        name=fusion_conv2,
+        caption=3D Conv\\32→16,
+        xlabel={{16, }},
+        zlabel=30,
+        fill=\ConvColor,
+        height=30,
+        width=4,
+        depth=30
+        }
+    };
+
+\draw [connection]  (fusion_conv1-east)    -- node {\midarrow} (fusion_conv2-west);
+
+\pic[shift={(1.5,0,0)}] at (fusion_conv2-east) 
+    {Box={
+        name=fusion_conv3,
+        caption=3D Conv\\16→1\\C\_d,
+        xlabel={{1, }},
+        zlabel=28,
+        fill=\ConvColor,
+        height=28,
+        width=1,
+        depth=28
+        }
+    };
+
+\draw [connection]  (fusion_conv2-east)    -- node {\midarrow} (fusion_conv3-west);
+
+\pic[shift={(2,0,0)}] at (fusion_conv3-east) 
+    {Box={
+        name=final_output,
+        caption=Final Output\\[B,11,D,H/4,W/4]\\Multi-info Features,
+        xlabel={{11, }},
+        zlabel=28,
+        fill=\ConvColor,
+        height=28,
+        width=4,
+        depth=28
+        }
+    };
+
+\draw [connection]  (fusion_conv3-east)    -- node {\midarrow} (final_output-west);
+
+\draw [connection]  (static_input-east)    -- node {\midarrow} (final_output-west);
+
+\draw [connection]  (mask_combine-east)    -- node {\midarrow} (final_output-west);
+
+\end{tikzpicture}
+\end{document}
